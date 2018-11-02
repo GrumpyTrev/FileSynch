@@ -14,8 +14,10 @@ namespace SynchApp
 		/// Parse the command line arguements, perform some basic validation and start the synchronisation process
 		/// </summary>
 		/// <param name="args"></param>
-		static void Main( string[] args )
+		static int Main( string[] args )
 		{
+			ExitCode success = ExitCode.Success;
+
 			try
 			{
 				// Parameter set to pass to the Sync library
@@ -23,22 +25,29 @@ namespace SynchApp
 
 				OptionSet options = new OptionSet()
 					.Add( "a|analyse", "analysis only, no synchronisation", a => parameters.AnalyseOnly = true )
+					.Add( "af|analyse first", "analysis only first and only synch if within limits defined in -ld and -lf options", 
+						af => parameters.AnalyseFirst = true )
 					.Add( "xh|exclude hidden", "exclude hidden files and directories", xh => parameters.ExcludeHidden = true )
 					.Add( "xi|exclude identical", "exclude identical files from the report", xi => parameters.ExcludeIdenticalFiles = true )
 					.Add( "d|delete", "delete files and directories in destination which do not appear in source", d => parameters.DeleteFromDest = true )
-					.Add( "xf|exclude files=", "exclude files from source that match any of the filespecs", 
+					.Add( "xf|exclude files=", "exclude files from source that match any of the filespecs",
 						xf => parameters.ExcludeFiles = FormRegexListfromString( xf ) )
-					.Add( "xd|exclude directories=", "exclude directories from source that match any of the filespecs", 
+					.Add( "xd|exclude directories=", "exclude directories from source that match any of the filespecs",
 						xd => parameters.ExcludeDirs = FormRegexListfromString( xd ) )
-					.Add( "if|include files=", "only include files from source that match one of the filespecs", 
+					.Add( "if|include files=", "only include files from source that match one of the filespecs",
 						inf => parameters.IncludeFiles = FormRegexListfromString( inf ) )
-					.Add( "id|include directories=", "include directories from source that match one of the filespecs", 
+					.Add( "id|include directories=", "include directories from source that match one of the filespecs",
 						ind => parameters.IncludeDirs = FormRegexListfromString( ind ) )
-					.Add( "ndf|exclude delete files=", "exclude files from deletion that match any of the filespecs", 
+					.Add( "ndf|exclude delete files=", "exclude files from deletion that match any of the filespecs",
 						ndf => parameters.DeleteExcludeFiles = FormRegexListfromString( ndf ) )
-					.Add( "ndd|exclude delete directories=", "Exclude directories from deletion that match any of the filespecs", 
-						ndd => parameters.DeleteExcludeDirs = FormRegexListfromString( ndd ) );
+					.Add( "ndd|exclude delete directories=", "Exclude directories from deletion that match any of the filespecs",
+						ndd => parameters.DeleteExcludeDirs = FormRegexListfromString( ndd ) )
+					.Add( "ld|limit directory synch=", "limit on the number of directories that will be synchronised if the --af option is set",
+						( uint ld ) => parameters.DirectorySynchLimit = ld )
+					.Add( "lf|limit file synch=", "limit on the number of files that will be synchronised if the --af option is set",
+						( uint lf ) => parameters.FileSynchLimit = lf );
 
+				// Parse the options and the left over directories
 				List<string> directories = options.Parse( args );
 
 				if ( directories.Count == 2 )
@@ -54,47 +63,80 @@ namespace SynchApp
 						if ( ( parameters.DestinationDirectory.StartsWith( fullSrcDir ) == false ) &&
 							( parameters.SourceDirectory.StartsWith( fullDestDir ) == false ) )
 						{
-							// Check that both includes and excludes have not been defined
-							if ( ( ( parameters.IncludeFiles == null ) || ( parameters.ExcludeFiles == null ) ) &&
-								 ( ( parameters.IncludeDirs == null ) || ( parameters.ExcludeDirs == null ) ) )
+							if ( ValidateOptions( options, parameters ) == true )
 							{
-								// Deletion excludions should only be defined if destination deletion has been specified
-								if ( ( parameters.DeleteFromDest == true ) ||
-									( ( parameters.DeleteExcludeFiles == null ) && ( parameters.DeleteExcludeDirs == null ) ) )
-								{
-									Console.WriteLine( "Synchronising source '{0}' and destination '{1}'", fullSrcDir, fullDestDir );
+								Console.WriteLine( "Synchronising source '{0}' and destination '{1}'", fullSrcDir, fullDestDir );
 
-									Sync synchroniseFiles = new Sync( parameters );
-									synchroniseFiles.Log = LogResult;
-									synchroniseFiles.Start();
-								}
-								else
+								Sync synchroniseFiles = new Sync( parameters );
+								synchroniseFiles.Log = LogResult;
+
+								if ( parameters.AnalyseFirst == true )
 								{
-									Console.WriteLine( "Error: exclude-from-deletion options (-ndf and -ndd) require deletion (-d) enabled." );
-									DisplayHelp( options );
+									// Analyse only
+									Console.WriteLine( "Analysing..." );
+									parameters.AnalyseOnly = true;
+									synchroniseFiles.Start();
+
+									if ( ( ( parameters.DirectorySynchLimit > 0 ) && ( DirectoriesMissing > parameters.DirectorySynchLimit ) ) ||
+										 ( ( parameters.FileSynchLimit > 0 ) && ( FilesMissing > parameters.FileSynchLimit ) ) )
+									{
+										Console.WriteLine( "+++++Synchronisation limits exceeded, no synchronisation performed {0} directories {1} files",
+											DirectoriesMissing, FilesMissing );
+										success = ExitCode.LimitsReached;
+									}
+									else
+									{
+										// Check if any synchronisation is required
+										if ( ( DirectoriesMissing > 0 ) || ( FilesMissing > 0 ) || ( FilesChanged > 0 ) )
+										{
+											// Reset parameters for second pass below
+											parameters.AnalyseOnly = false;
+											parameters.AnalyseFirst = false;
+											parameters.FileSynchLimit = 0;
+											parameters.DirectorySynchLimit = 0;
+
+											Console.WriteLine( "Synchronising..." );
+										}
+										else
+										{
+											Console.WriteLine( "No synchronisation required" );
+										}
+									}
+								}
+
+								if ( parameters.AnalyseFirst == false )
+								{
+									synchroniseFiles.Start();
+
+									if ( ( DirectoriesMissing == 0 ) && ( FilesMissing == 0 ) && ( FilesChanged == 0 ) )
+									{
+										Console.WriteLine( "No synchronisation required" );
+									}
 								}
 							}
 							else
 							{
-								Console.WriteLine( "Error: cannot include and exclude items at the same time." );
-								DisplayHelp( options );
+								success = ExitCode.OptionError;
 							}
 						}
 						else
 						{
 							Console.WriteLine( "Error: source directory {0} and destination directory {1} cannot contain each other", fullSrcDir, fullDestDir );
 							DisplayHelp( options );
+							success = ExitCode.DirectoryError;
 						}
 					}
 					else
 					{
 						Console.WriteLine( "Error: source directory {0} does not exist", parameters.SourceDirectory );
 						DisplayHelp( options );
+						success = ExitCode.DirectoryError;
 					}
 				}
 				else
 				{
 					DisplayHelp( options );
+					success = ExitCode.DirectoryError;
 				}
 			}
 			catch ( OptionException oException )
@@ -102,29 +144,96 @@ namespace SynchApp
 				Console.Write( "SynchApp: " );
 				Console.WriteLine( oException.Message );
 				Console.WriteLine( "Try 'SynchApp --help' for more information" );
+				success = ExitCode.DirectoryError;
 			}
 			catch ( NotSupportedException nsException )
 			{
 				Console.Write( "SynchApp: " );
 				Console.WriteLine( nsException.Message );
 				Console.WriteLine( "Try 'SynchApp --help' for more information" );
+				success = ExitCode.DirectoryError;
 			}
+
+			return ( int )success;
 		}
 
-		static void DisplayHelp( OptionSet options )
+		/// <summary>
+		/// Validate option combinations
+		/// </summary>
+		/// <param name="options"></param>
+		/// <param name="parameters"></param>
+		/// <returns></returns>
+		private static bool ValidateOptions( OptionSet options, InputParams parameters )
+		{
+			bool success = false;
+
+			// Check that both includes and excludes have not been defined
+			if ( ( ( parameters.IncludeFiles == null ) || ( parameters.ExcludeFiles == null ) ) &&
+				 ( ( parameters.IncludeDirs == null ) || ( parameters.ExcludeDirs == null ) ) )
+			{
+				// Deletion exclusions should only be defined if destination deletion has been specified
+				if ( ( parameters.DeleteFromDest == true ) ||
+					( ( parameters.DeleteExcludeFiles == null ) && ( parameters.DeleteExcludeDirs == null ) ) )
+				{
+					// If the Analyse First option has been set then one of the limits should also be specified
+					if ( ( parameters.AnalyseFirst == false ) ||
+						 ( ( parameters.AnalyseOnly == false ) && ( ( parameters.DirectorySynchLimit + parameters.FileSynchLimit ) > 0 ) ) )
+					{
+						success = true;
+					}
+					else
+					{
+						if ( parameters.AnalyseOnly == true )
+						{
+							Console.WriteLine( "Error: analyse first and analyse only options cannot both be set." );
+							DisplayHelp( options );
+						}
+						else
+						{
+							Console.WriteLine( "Error: analyse first option requries a limit ( -ld or -lf )." );
+							DisplayHelp( options );
+						}
+					}
+				}
+				else
+				{
+					Console.WriteLine( "Error: exclude-from-deletion options (-ndf and -ndd) require deletion (-d) enabled." );
+					DisplayHelp( options );
+				}
+			}
+			else
+			{
+				Console.WriteLine( "Error: cannot include and exclude items at the same time." );
+				DisplayHelp( options );
+			}
+
+			return success;
+		}
+
+		/// <summary>
+		/// Display the options specified in the OptionSet and any multiple option requirements
+		/// </summary>
+		/// <param name="options"></param>
+		private static void DisplayHelp( OptionSet options )
 		{
 			Console.WriteLine( "Usage 'SynchApp source destination [OPTIONS]+'" );
 			Console.WriteLine( "Synchronise the destination directory with the source directory" );
 			Console.WriteLine( "Options: " );
 
 			Console.WriteLine( "" );
+			options.WriteOptionDescriptions( Console.Out );
+			Console.WriteLine( "" );
 			Console.WriteLine( "Include/exclude files options (-if and -xf) may not be combined." );
 			Console.WriteLine( "Include/exclude directories options (-id and -xd) may not be combined." );
 			Console.WriteLine( "Exclude-from-deletion options (-ndf and -ndd) require deletion (-d) enabled." );
-
-			options.WriteOptionDescriptions( Console.Out );
+			Console.WriteLine( "" );
+			Console.WriteLine( "If the Analyse First (-af) option is set then at least on of the limits ( -ld or -lf ) must be specified" );
 		}
 
+		/// <summary>
+		/// Log the results to the console and keep track of the number of directories and files that require synchronisation
+		/// </summary>
+		/// <param name="result"></param>
 		private static void LogResult( SyncResult result )
 		{
 			if ( result.Item == SyncResult.ItemType.Trace )
@@ -136,6 +245,7 @@ namespace SynchApp
 				if ( result.Reason == SyncResult.ReasonType.OnlyIn )
 				{
 					Console.WriteLine( string.Format( "'{0}' only in '{1}'", result.Message, result.Container ) );
+					FilesMissing++;
 				}
 				else
 				{
@@ -150,12 +260,14 @@ namespace SynchApp
 						case SyncResult.ReasonType.ModifiedTime:
 						{
 							Console.WriteLine( string.Format( "'{0}' different modified times", result.Message ) );
+							FilesChanged++;
 							break;
 						}
 
 						case SyncResult.ReasonType.Length:
 						{
 							Console.WriteLine( string.Format( "'{0}' different lengths", result.Message ) );
+							FilesChanged++;
 							break;
 						}
 
@@ -167,6 +279,7 @@ namespace SynchApp
 				if ( result.Reason == SyncResult.ReasonType.OnlyIn )
 				{
 					Console.WriteLine( string.Format( "'{0}' only in '{1}'", result.Message, result.Container ) );
+					DirectoriesMissing++;
 				}
 			}
 		}
@@ -192,5 +305,19 @@ namespace SynchApp
 			return result.ToArray();
 		}
 
+		/// <summary>
+		/// Keep track of the number of directories or files that have been or require synchronising
+		/// </summary>
+		private static uint DirectoriesMissing = 0;
+		private static uint FilesMissing = 0;
+		private static uint FilesChanged = 0;
+
+		private enum ExitCode: int
+		{
+			Success = 0,
+			OptionError = 1,
+			DirectoryError = 2,
+			LimitsReached = 3
+		}
 	}
 }

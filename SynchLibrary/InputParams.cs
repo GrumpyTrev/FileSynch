@@ -21,6 +21,12 @@ namespace SynchLibrary
 		public bool AnalyseOnly { get; set; } = false;
 
 		/// <summary>
+		/// If true perform an analysis of the differences and then only synchronise if the number of
+		/// directories and files to sychronise is below the specified limits
+		/// </summary>
+		public bool AnalyseFirst { get; set; } = false;
+
+		/// <summary>
 		/// Should exclude hidden files/directories in source
 		/// </summary>
 		public bool ExcludeHidden { get; set; } = false;
@@ -65,7 +71,19 @@ namespace SynchLibrary
 		/// </summary>
 		public Regex[] DeleteExcludeDirs { get; set; } = null;
 
-        public bool AreSourceFilesFiltered
+		/// <summary>
+		/// If AnalyseFirst is true then this specifies the maximum number of directories( source or destination) that 
+		/// will be synchronised.  If this limit is exceeded then no synchronisation will take place
+		/// </summary>
+		public uint DirectorySynchLimit = 0;
+
+		/// <summary>
+		/// If AnalyseFirst is true then this specifies the maximum number of files( source or destination) that 
+		/// will be synchronised.  If this limit is exceeded then no synchronisation will take place
+		/// </summary>
+		public uint FileSynchLimit = 0;
+		
+		public bool AreSourceFilesFiltered
         {
             get
             {
