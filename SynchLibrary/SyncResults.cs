@@ -14,12 +14,13 @@ namespace SynchLibrary
 			return result;
 		}
 
-		public SyncResult AddResult( SyncResult.ItemType type,SyncResult.ReasonType reason, string itemName, string containerName )
+		public SyncResult AddResult( SyncResult.ItemType type, SyncResult.ReasonType reason, SyncResult.ContainerType container, string itemName, string containerName )
 		{
-			SyncResult result = new SyncResult( type,reason, itemName, containerName );
+			SyncResult result = new SyncResult( type, reason, container, itemName, containerName );
 			Results.Add( result );
 			return result;
 		}
+
 	}
 
 	public class SyncResult
@@ -39,16 +40,24 @@ namespace SynchLibrary
 			Identical
 		}
 
+		public enum ContainerType
+		{
+			Source,
+			Destination,
+			NA
+		}
+
 		public SyncResult( string traceMessage )
 		{
 			Item = ItemType.Trace;
 			Message = traceMessage;
 		}
 
-		public SyncResult( SyncResult.ItemType type, SyncResult.ReasonType reason, string itemName, string containerName )
+		public SyncResult( SyncResult.ItemType type, SyncResult.ReasonType reason, SyncResult.ContainerType container, string itemName, string containerName )
 		{
 			Item = type;
 			Reason = reason;
+			Context = container;
 			Message = itemName;
 			Container = containerName;
 		}
@@ -59,6 +68,8 @@ namespace SynchLibrary
 		public ItemType Item { get; set; }
 
 		public ReasonType Reason { get; set; }
+
+		public ContainerType Context { get; set; }
 
 		public string Message { get; set; }
 

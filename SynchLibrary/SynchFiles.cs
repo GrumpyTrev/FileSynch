@@ -37,7 +37,7 @@ namespace SynchLibrary
             results = new SyncResults();
 
             // Recursively process directories
-            ProcessDirectory( Configuration.SourceDirectory, Configuration.DestinationDirectory );
+            ProcessDirectory( Configuration.SourceDirectory, Configuration.DestinationDirectory, true );
 
             return results;
         }
@@ -47,7 +47,8 @@ namespace SynchLibrary
 		/// </summary>
 		/// <param name="sourceDirectory"></param>
 		/// <param name="destinationDirectory"></param>
-		private bool ProcessDirectory( string sourceDirectory, string destinationDirectory )
+		/// <param name="topLevel">Is this the top level directory of the synchronisation job</param>
+		private bool ProcessDirectory( string sourceDirectory, string destinationDirectory, bool topLevel )
         {
 			bool success = false;
 
@@ -64,7 +65,7 @@ namespace SynchLibrary
 				{
 					if ( SynchroniseFiles( sourceInfo, destinationInfo ) == true )
 					{
-						success = SynchroniseSubDirectories( sourceInfo, destinationInfo );
+						success = SynchroniseSubDirectories( sourceInfo, destinationInfo, topLevel );
 					}
 				}
 				else
@@ -87,7 +88,7 @@ namespace SynchLibrary
 
 			if ( directory.Exists == false )
 			{
-				TraceItem( SyncResult.ItemType.Directory, SyncResult.ReasonType.OnlyIn, FileDisplayName( directory.FullName, Configuration.DestinationDirectory ), 
+				TraceItem( SyncResult.ItemType.Directory, SyncResult.ReasonType.OnlyIn, SyncResult.ContainerType.Destination, FileDisplayName( directory.FullName, Configuration.DestinationDirectory ), 
 					Configuration.SourceDirectory );
 
 				if ( Configuration.AnalyseOnly == false )
@@ -141,24 +142,22 @@ namespace SynchLibrary
 					success = SynchroniseFile( sourceFiles[ fileIndex ], destinationDirectory, destinationFilesDictionary );
 				}
 
-				// Delete extra files in destination directory if specified
-				if ( Configuration.DeleteFromDest == true )
+				// Check if destination files should be removed, but only actually delete if the deletion flag is set
+
+				// Form source file dictionary for quick lookup
+				Dictionary<string, FileInfo> sourceFilesDictionary = new Dictionary<string, FileInfo>();
+				foreach ( FileInfo sourceFile in sourceFiles )
 				{
-					// Form source file dictionary for quick lookup
-					Dictionary<string, FileInfo> sourceFilesDictionary = new Dictionary<string, FileInfo>();
-					foreach ( FileInfo sourceFile in sourceFiles )
-					{
-						sourceFilesDictionary.Add( sourceFile.Name, sourceFile );
-					}
+					sourceFilesDictionary.Add( sourceFile.Name, sourceFile );
+				}
 
-					for ( int fileIndex = 0; ( fileIndex < destinationFiles.Count ) && ( success == true ); ++fileIndex )
-					{
-						FileInfo destinationFile = destinationFiles[ fileIndex ];
+				for ( int fileIndex = 0; ( fileIndex < destinationFiles.Count ) && ( success == true ); ++fileIndex )
+				{
+					FileInfo destinationFile = destinationFiles[ fileIndex ];
 
-						if ( sourceFilesDictionary.ContainsKey( destinationFile.Name ) == false )
-						{
-							success = DeleteUnmatchedFile( destinationFile );
-						}
+					if ( sourceFilesDictionary.ContainsKey( destinationFile.Name ) == false )
+					{
+						success = DeleteUnmatchedFile( destinationFile );
 					}
 				}
 			}
@@ -196,28 +195,28 @@ namespace SynchLibrary
 					{
 						if ( Configuration.ExcludeIdenticalFiles == false )
 						{
-							TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.Identical, FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ),
-								Configuration.SourceDirectory );
+							TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.Identical, SyncResult.ContainerType.NA,
+								FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ), Configuration.SourceDirectory );
 						}
 
 						filesMatch = true;
 					}
 					else
 					{
-						TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.Length, FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ),
-							Configuration.SourceDirectory );
+						TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.Length, SyncResult.ContainerType.NA,
+							FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ), Configuration.SourceDirectory );
 					}
 				}
 				else
 				{
-					TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.ModifiedTime, FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ),
-							Configuration.SourceDirectory );
+					TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.ModifiedTime, SyncResult.ContainerType.NA,
+						FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ), Configuration.SourceDirectory );
 				}
 			}
 			else
 			{
-				TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.OnlyIn, FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ),
-							Configuration.SourceDirectory );
+				TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.OnlyIn, SyncResult.ContainerType.Source,
+					FileDisplayName( sourceFile.FullName, Configuration.SourceDirectory ), Configuration.SourceDirectory );
 			}
 
 			if ( Configuration.AnalyseOnly == false )
@@ -266,10 +265,10 @@ namespace SynchLibrary
 			// If this file is specified in exclude-from-deletion list, don't delete it
 			if ( ShouldExclude( Configuration.DeleteExcludeFiles, null, fileToDelete.Name ) == false )
 			{
-				TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.OnlyIn, FileDisplayName( fileToDelete.FullName, Configuration.DestinationDirectory ),
-					Configuration.DestinationDirectory );
+				TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.OnlyIn, SyncResult.ContainerType.Destination,
+					FileDisplayName( fileToDelete.FullName, Configuration.DestinationDirectory ), Configuration.DestinationDirectory );
 
-				if ( Configuration.AnalyseOnly == false )
+				if  ( Configuration.DeleteFilesFromDest == true )
 				{
 					try
 					{
@@ -294,16 +293,17 @@ namespace SynchLibrary
 		/// </summary>
 		/// <param name="sourceDirectory"></param>
 		/// <param name="destinationDirectory"></param>
+		/// <param name="topLevel">Is this the top level directory of the synchronisation job</param>
 		/// <returns></returns>
-		private bool SynchroniseSubDirectories( DirectoryInfo sourceDirectory, DirectoryInfo destinationDirectory )
+		private bool SynchroniseSubDirectories( DirectoryInfo sourceDirectory, DirectoryInfo destinationDirectory, bool topLevel )
 		{
 			bool success = true;
 
 			// Get list of selected subdirectories in source directory
-			List<DirectoryInfo> sourceSubDirectories = GetDirectories( sourceDirectory, Configuration );
+			List<DirectoryInfo> sourceSubDirectories = GetDirectories( sourceDirectory, Configuration, topLevel );
 
 			// Get list of subdirectories in destination directory
-			List<DirectoryInfo> destinationSubDirectories = GetDirectories( destinationDirectory, Configuration );
+			List<DirectoryInfo> destinationSubDirectories = GetDirectories( destinationDirectory, Configuration, topLevel );
 
 			// Any problems accessing the subdirectories
 			if ( ( sourceSubDirectories != null ) && ( destinationSubDirectories != null ) )
@@ -318,7 +318,7 @@ namespace SynchLibrary
 					sourceDirectoriesDictionary.Add( sourceSubDirectory.Name, sourceSubDirectory );
 
 					// Recurse into this directory
-					success = ProcessDirectory( sourceSubDirectory.FullName, Path.Combine( destinationDirectory.FullName, sourceSubDirectory.Name ) );
+					success = ProcessDirectory( sourceSubDirectory.FullName, Path.Combine( destinationDirectory.FullName, sourceSubDirectory.Name ), false );
 				}
 
 				// Delete extra directories in destination if specified
@@ -330,10 +330,10 @@ namespace SynchLibrary
 						// if this directory is specified in exclude-from-deletion list, don't delete it
 						if ( ShouldExclude( Configuration.DeleteExcludeDirs, null, destinationSubDirectory.Name ) == false )
 						{
-							TraceItem( SyncResult.ItemType.Directory, SyncResult.ReasonType.OnlyIn, 
+							TraceItem( SyncResult.ItemType.Directory, SyncResult.ReasonType.OnlyIn, SyncResult.ContainerType.Destination,
 								FileDisplayName( destinationSubDirectory.FullName, Configuration.DestinationDirectory ), Configuration.DestinationDirectory );
 
-							if ( ( Configuration.AnalyseOnly == false ) && ( Configuration.DeleteFromDest == true ) )
+							if ( ( Configuration.AnalyseOnly == false ) && ( Configuration.DeleteDirsFromDest == true ) )
 							{
 								try
 								{
@@ -423,7 +423,8 @@ namespace SynchLibrary
 		/// Gets list of subdirectories of specified directory, optionally filtered by specified input parameters
 		/// </summary>
 		/// <param name="directoryInfo"></param>
-		private List<DirectoryInfo> GetDirectories( DirectoryInfo directoryInfo, InputParams filesConfiguration )
+		/// <param name="topLevel">Is this the top level directory of the synchronisation job</param>
+		private List<DirectoryInfo> GetDirectories( DirectoryInfo directoryInfo, InputParams filesConfiguration, bool topLevel )
 		{
 			List<DirectoryInfo> returnList = null;
 
@@ -432,19 +433,30 @@ namespace SynchLibrary
 				// Get all directories
 				List<DirectoryInfo> directoryList = new List<DirectoryInfo>( directoryInfo.GetDirectories() );
 
-				// do we need to do any filtering?
-				bool needFilter = ( filesConfiguration != null ) && ( filesConfiguration.AreSourceFilesFiltered == true );
-				if ( needFilter == true )
+				// Do we need to do any filtering?
+				if ( ( filesConfiguration.ExcludeHidden == true ) ||
+					( filesConfiguration.AreSourceDirectoriesFiltered == true ) && ( ( topLevel == true ) || ( filesConfiguration.IncludeExcludeTopLevelOnly == false ) ) )
 				{
 					returnList = new List<DirectoryInfo>();
 
 					foreach ( DirectoryInfo subdirInfo in directoryList )
 					{
-						// filter out directories based on hiddenness and exclude/include filespecs
-						if ( ( ( filesConfiguration.ExcludeHidden == false ) || ( ( subdirInfo.Attributes & FileAttributes.Hidden ) == 0 ) ) &&
-							( ShouldExclude( filesConfiguration.ExcludeDirs, filesConfiguration.IncludeDirs, subdirInfo.Name ) == false ) )
+						// Filter out directories based on hiddenness and exclude/include filespecs
+						// Should directory be filtered due to it being hidden
+						if ( ( filesConfiguration.ExcludeHidden == false ) || ( ( subdirInfo.Attributes & FileAttributes.Hidden ) == 0 ) )
 						{
-							returnList.Add( subdirInfo );
+							// Should directory be filtered by name
+							if ( ( topLevel == true ) || ( filesConfiguration.IncludeExcludeTopLevelOnly == false ) )
+							{
+								if ( ShouldExclude( filesConfiguration.ExcludeDirs, filesConfiguration.IncludeDirs, subdirInfo.Name ) == false )
+								{
+									returnList.Add( subdirInfo );
+								}
+							}
+							else
+							{
+								returnList.Add( subdirInfo );
+							}
 						}
 					}
 				}
@@ -511,14 +523,14 @@ namespace SynchLibrary
 
 		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, string itemName )
 		{
-			TraceItem( type, reason, itemName, null );
+			TraceItem( type, reason, SyncResult.ContainerType.NA ,itemName, null );
 		}
 
-		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, string itemName, string containerName )
+		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, SyncResult.ContainerType container, string itemName, string containerName )
 		{
 			if ( Log != null )
 			{
-				Log.Invoke( results.AddResult( type, reason, itemName, containerName ) );
+				Log.Invoke( results.AddResult( type, reason, container, itemName, containerName ) );
 			}
 		}
 

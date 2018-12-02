@@ -46,18 +46,29 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Logging.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ProgramParams.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="XMLConfiguration\xmlconfiguration.cs">
+      <DependentUpon>XMLConfiguration.xsd</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
     <None Include="packages.config" />
+    <None Include="XMLConfiguration\XMLConfiguration.xsd">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SynchLibrary\SynchLibrary.csproj">
       <Project>{707E9BA4-9DE9-4B36-96D5-C5C9FCE4EE5F}</Project>
       <Name>SynchLibrary</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="XMLConfiguration\XMLConfiguration.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

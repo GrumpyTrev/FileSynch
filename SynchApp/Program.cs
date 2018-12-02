@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Xml.Serialization;
 
 namespace SynchApp
 {
@@ -17,126 +18,73 @@ namespace SynchApp
 		static int Main( string[] args )
 		{
 			ExitCode success = ExitCode.Success;
+			int errorCode = ( int )success;
+			bool commandLineJob = true;
 
 			try
 			{
-				// Parameter set to pass to the Sync library
-				InputParams parameters = new InputParams();
+				// Collection of InputParams one per backup job
+				List<ProgramParams> backupJobs = new List<ProgramParams>();
 
-				OptionSet options = new OptionSet()
-					.Add( "a|analyse", "analysis only, no synchronisation", a => parameters.AnalyseOnly = true )
-					.Add( "af|analyse first", "analysis only first and only synch if within limits defined in -ld and -lf options", 
-						af => parameters.AnalyseFirst = true )
-					.Add( "xh|exclude hidden", "exclude hidden files and directories", xh => parameters.ExcludeHidden = true )
-					.Add( "xi|exclude identical", "exclude identical files from the report", xi => parameters.ExcludeIdenticalFiles = true )
-					.Add( "d|delete", "delete files and directories in destination which do not appear in source", d => parameters.DeleteFromDest = true )
-					.Add( "xf|exclude files=", "exclude files from source that match any of the filespecs",
-						xf => parameters.ExcludeFiles = FormRegexListfromString( xf ) )
-					.Add( "xd|exclude directories=", "exclude directories from source that match any of the filespecs",
-						xd => parameters.ExcludeDirs = FormRegexListfromString( xd ) )
-					.Add( "if|include files=", "only include files from source that match one of the filespecs",
-						inf => parameters.IncludeFiles = FormRegexListfromString( inf ) )
-					.Add( "id|include directories=", "include directories from source that match one of the filespecs",
-						ind => parameters.IncludeDirs = FormRegexListfromString( ind ) )
-					.Add( "ndf|exclude delete files=", "exclude files from deletion that match any of the filespecs",
-						ndf => parameters.DeleteExcludeFiles = FormRegexListfromString( ndf ) )
-					.Add( "ndd|exclude delete directories=", "Exclude directories from deletion that match any of the filespecs",
-						ndd => parameters.DeleteExcludeDirs = FormRegexListfromString( ndd ) )
-					.Add( "ld|limit directory synch=", "limit on the number of directories that will be synchronised if the --af option is set",
-						( uint ld ) => parameters.DirectorySynchLimit = ld )
-					.Add( "lf|limit file synch=", "limit on the number of files that will be synchronised if the --af option is set",
-						( uint lf ) => parameters.FileSynchLimit = lf );
+				// Assume that the options for a single backup is specified on the command line and only a single InputParams object
+				// is required
+				ProgramParams commandParameters = new ProgramParams();
+				OptionSet options = ConfigureOptions( commandParameters );
 
 				// Parse the options and the left over directories
 				List<string> directories = options.Parse( args );
 
+				// If two unmatched strings have been specified then assume that the command line includes the source and destination
+				// and that the InputParams will be set by the OptionSet
 				if ( directories.Count == 2 )
 				{
-					parameters.SourceDirectory = new DirectoryInfo( directories[ 0 ] ).FullName;
-					parameters.DestinationDirectory = new DirectoryInfo( directories[ 1 ] ).FullName;
+					commandParameters.SourceDirectory = new DirectoryInfo( directories[ 0 ] ).FullName;
+					commandParameters.DestinationDirectory = new DirectoryInfo( directories[ 1 ] ).FullName;
 
-					// Check that at least the source directory exists and that the directories don't overlap in some way
-					if ( Directory.Exists( parameters.SourceDirectory ) == true )
+					backupJobs.Add( commandParameters );
+				}
+				else if ( directories.Count == 1 )
+				{
+					// Assume that if a single file has been specified then it is an xml configuration file
+					commandLineJob = false;
+
+					if ( GetOptionsFromXmlFile( backupJobs, directories[ 0 ] ) == false )
 					{
-						string fullSrcDir = Path.GetFullPath( parameters.SourceDirectory );
-						string fullDestDir = Path.GetFullPath( parameters.DestinationDirectory );
-						if ( ( parameters.DestinationDirectory.StartsWith( fullSrcDir ) == false ) &&
-							( parameters.SourceDirectory.StartsWith( fullDestDir ) == false ) )
-						{
-							if ( ValidateOptions( options, parameters ) == true )
-							{
-								Console.WriteLine( "Synchronising source '{0}' and destination '{1}'", fullSrcDir, fullDestDir );
-
-								Sync synchroniseFiles = new Sync( parameters );
-								synchroniseFiles.Log = LogResult;
-
-								if ( parameters.AnalyseFirst == true )
-								{
-									// Analyse only
-									Console.WriteLine( "Analysing..." );
-									parameters.AnalyseOnly = true;
-									synchroniseFiles.Start();
-
-									if ( ( ( parameters.DirectorySynchLimit > 0 ) && ( DirectoriesMissing > parameters.DirectorySynchLimit ) ) ||
-										 ( ( parameters.FileSynchLimit > 0 ) && ( FilesMissing > parameters.FileSynchLimit ) ) )
-									{
-										Console.WriteLine( "+++++Synchronisation limits exceeded, no synchronisation performed {0} directories {1} files",
-											DirectoriesMissing, FilesMissing );
-										success = ExitCode.LimitsReached;
-									}
-									else
-									{
-										// Check if any synchronisation is required
-										if ( ( DirectoriesMissing > 0 ) || ( FilesMissing > 0 ) || ( FilesChanged > 0 ) )
-										{
-											// Reset parameters for second pass below
-											parameters.AnalyseOnly = false;
-											parameters.AnalyseFirst = false;
-											parameters.FileSynchLimit = 0;
-											parameters.DirectorySynchLimit = 0;
-
-											Console.WriteLine( "Synchronising..." );
-										}
-										else
-										{
-											Console.WriteLine( "No synchronisation required" );
-										}
-									}
-								}
-
-								if ( parameters.AnalyseFirst == false )
-								{
-									synchroniseFiles.Start();
-
-									if ( ( DirectoriesMissing == 0 ) && ( FilesMissing == 0 ) && ( FilesChanged == 0 ) )
-									{
-										Console.WriteLine( "No synchronisation required" );
-									}
-								}
-							}
-							else
-							{
-								success = ExitCode.OptionError;
-							}
-						}
-						else
-						{
-							Console.WriteLine( "Error: source directory {0} and destination directory {1} cannot contain each other", fullSrcDir, fullDestDir );
-							DisplayHelp( options );
-							success = ExitCode.DirectoryError;
-						}
-					}
-					else
-					{
-						Console.WriteLine( "Error: source directory {0} does not exist", parameters.SourceDirectory );
 						DisplayHelp( options );
-						success = ExitCode.DirectoryError;
+						success = ExitCode.XmlError;
 					}
 				}
 				else
 				{
 					DisplayHelp( options );
 					success = ExitCode.DirectoryError;
+				}
+
+				if ( success == ExitCode.Success )
+				{
+					// If this is a command line job then perform it and return its success code
+					if ( commandLineJob == true )
+					{
+						success = PerformBackup( backupJobs[ 0 ], options );
+
+						// Include destination file and directory deletions in the error code if successfull
+						if ( success == ExitCode.Success )
+						{
+							errorCode += ( int )( ( ( UnmatchedDestinationFile > 255 ? 255 : UnmatchedDestinationFile ) & 255 ) << 8 );
+							errorCode += ( int )( ( ( UnmatchedDestinationDirectory > 255 ? 255 : UnmatchedDestinationDirectory ) & 255 ) << 16 );
+						}
+					}
+					else
+					{
+						// Set up alternative console logging
+						Console.SetOut( new Logging( 30 ) );
+
+						// Process each backup job until
+						foreach ( ProgramParams job in backupJobs )
+						{
+							PerformBackup( job, options );
+						}
+					}
 				}
 			}
 			catch ( OptionException oException )
@@ -154,7 +102,186 @@ namespace SynchApp
 				success = ExitCode.DirectoryError;
 			}
 
-			return ( int )success;
+			// Include the success code in the erorr code
+			errorCode += ( int )success;
+
+			return errorCode;
+		}
+
+		/// <summary>
+		/// Carry out a backup job as defined by options in the ProgramParams
+		/// </summary>
+		/// <param name="parameters"></param>
+		/// <param name="options"></param>
+		/// <returns></returns>
+		private static ExitCode PerformBackup( ProgramParams parameters, OptionSet options )
+		{
+			ExitCode success = ExitCode.Success;
+
+			ResetLocalCounts();
+
+			// Check that at least the source directory exists and that the directories don't overlap in some way
+			if ( Directory.Exists( parameters.SourceDirectory ) == true )
+			{
+				string fullSrcDir = Path.GetFullPath( parameters.SourceDirectory );
+				string fullDestDir = Path.GetFullPath( parameters.DestinationDirectory );
+				if ( ( parameters.DestinationDirectory.StartsWith( fullSrcDir ) == false ) &&
+					( parameters.SourceDirectory.StartsWith( fullDestDir ) == false ) )
+				{
+					if ( ValidateOptions( options, parameters ) == true )
+					{
+						Console.WriteLine( "==================================================" );
+						Console.WriteLine( "Job started : {0}", DateTime.Now.TimeOfDay );
+
+						if ( parameters.Name.Length > 0 )
+						{
+							Console.WriteLine( parameters.Name );
+						}
+
+						Console.WriteLine( "Synchronising source '{0}' and destination '{1}'", fullSrcDir, fullDestDir );
+						Console.WriteLine( "==================================================" );
+
+						Sync synchroniseFiles = new Sync( parameters );
+						synchroniseFiles.Log = LogResult;
+
+						if ( parameters.AnalyseFirst == true )
+						{
+							// Analyse only
+							Console.WriteLine( "Analysing..." );
+							parameters.AnalyseOnly = true;
+							synchroniseFiles.Start();
+
+							if ( ( ( parameters.DirectorySynchLimit > 0 ) && ( DirectoriesMissing > parameters.DirectorySynchLimit ) ) ||
+								 ( ( parameters.FileSynchLimit > 0 ) && ( FilesMissing > parameters.FileSynchLimit ) ) )
+							{
+								Console.WriteLine( "+++++Synchronisation limits exceeded, no synchronisation performed {0} directories {1} files",
+									DirectoriesMissing, FilesMissing );
+								success = ExitCode.LimitsReached;
+							}
+							else
+							{
+								// Check if any synchronisation is required
+								if ( ( DirectoriesMissing > 0 ) || ( FilesMissing > 0 ) || ( FilesChanged > 0 ) )
+								{
+									// Reset parameters for second pass below
+									parameters.AnalyseOnly = false;
+									parameters.AnalyseFirst = false;
+									parameters.FileSynchLimit = 0;
+									parameters.DirectorySynchLimit = 0;
+
+									Console.WriteLine( "Synchronising..." );
+								}
+								else
+								{
+									Console.WriteLine( "No synchronisation required" );
+								}
+							}
+						}
+
+						if ( parameters.AnalyseFirst == false )
+						{
+							synchroniseFiles.Start();
+
+							if ( ( DirectoriesMissing == 0 ) && ( FilesMissing == 0 ) && ( FilesChanged == 0 ) )
+							{
+								Console.WriteLine( "No synchronisation required" );
+							}
+						}
+
+						Console.WriteLine( "==================================================" );
+						Console.WriteLine( "Job finished : {0}", DateTime.Now.TimeOfDay );
+						Console.WriteLine( "==================================================" );
+						Console.WriteLine( "" );
+						Console.WriteLine( "" );
+					}
+					else
+					{
+						success = ExitCode.OptionError;
+					}
+				}
+				else
+				{
+					Console.WriteLine( "Error: source directory {0} and destination directory {1} cannot contain each other", fullSrcDir, fullDestDir );
+					DisplayHelp( options );
+					success = ExitCode.DirectoryError;
+				}
+			}
+			else
+			{
+				Console.WriteLine( "Error: source directory {0} does not exist", parameters.SourceDirectory );
+				DisplayHelp( options );
+				success = ExitCode.DirectoryError;
+			}
+
+			return success;
+		}
+
+		/// <summary>
+		/// Deserialise an xml configuration file into a set of backup jobs
+		/// </summary>
+		/// <param name="backups"></param>
+		/// <param name="configFile"></param>
+		/// <returns></returns>
+		private static bool GetOptionsFromXmlFile( List<ProgramParams> backups, string configFile )
+		{
+			bool success = true;
+
+			try
+			{
+				// Deserialise the file contents into a Configuration object
+				Configuration xmlConfig = ( Configuration )new XmlSerializer( typeof( Configuration ) ).Deserialize( new FileStream( configFile, FileMode.Open ) );
+
+				// Now copy fields from the Configuration object to the parameters, one InputParams per backup job
+				foreach ( ConfigurationBackup backup in xmlConfig.Backups )
+				{
+					ProgramParams parameters = new ProgramParams();
+
+					// Common options
+					parameters.AnalyseOnly = xmlConfig.Options.analyseOnly;
+					parameters.ExcludeHidden = xmlConfig.Options.excludeHidden;
+					parameters.ExcludeIdenticalFiles = xmlConfig.Options.excludeIdentical;
+					parameters.DeleteDirsFromDest = xmlConfig.Options.deleteDirectories;
+					parameters.DeleteFilesFromDest = xmlConfig.Options.deleteFiles;
+					parameters.UseRegex = xmlConfig.Options.useRegex;
+					parameters.IncludeExcludeTopLevelOnly = xmlConfig.Options.topLevelDirectories;
+
+					// Specific to this backup
+					parameters.Name = backup.name;
+					parameters.SourceDirectory = new DirectoryInfo( backup.source ).FullName;
+					parameters.DestinationDirectory = new DirectoryInfo( backup.destination ).FullName;
+
+					if ( backup.directoryExcludes.directoryExclude != null )
+					{
+						parameters.ExcludeDirs = RegexListFromStringList( backup.directoryExcludes.directoryExclude, parameters.UseRegex );
+					}
+
+					if ( backup.directoryIncludes.directoryInclude != null )
+					{
+						parameters.IncludeDirs = RegexListFromStringList( backup.directoryIncludes.directoryInclude, parameters.UseRegex );
+					}
+
+					backups.Add( parameters );
+				}
+			}
+			catch ( FileNotFoundException nfException )
+			{
+				Console.Write( "SynchApp: " );
+				Console.WriteLine( nfException.Message );
+				success = false;
+			}
+			catch ( InvalidOperationException ioException )
+			{
+				Console.Write( "SynchApp: " );
+				Console.WriteLine( ioException.Message );
+				if ( ioException.InnerException != null )
+				{
+					Console.WriteLine( ioException.InnerException.Message );
+				}
+
+				success = false;
+			}
+
+			return success;
 		}
 
 		/// <summary>
@@ -163,7 +290,7 @@ namespace SynchApp
 		/// <param name="options"></param>
 		/// <param name="parameters"></param>
 		/// <returns></returns>
-		private static bool ValidateOptions( OptionSet options, InputParams parameters )
+		private static bool ValidateOptions( OptionSet options, ProgramParams parameters )
 		{
 			bool success = false;
 
@@ -172,8 +299,8 @@ namespace SynchApp
 				 ( ( parameters.IncludeDirs == null ) || ( parameters.ExcludeDirs == null ) ) )
 			{
 				// Deletion exclusions should only be defined if destination deletion has been specified
-				if ( ( parameters.DeleteFromDest == true ) ||
-					( ( parameters.DeleteExcludeFiles == null ) && ( parameters.DeleteExcludeDirs == null ) ) )
+				if ( ( ( parameters.DeleteFilesFromDest == true ) || ( parameters.DeleteExcludeFiles == null ) ) && 
+					 ( ( parameters.DeleteDirsFromDest == true ) || ( parameters.DeleteExcludeDirs == null ) ) )
 				{
 					// If the Analyse First option has been set then one of the limits should also be specified
 					if ( ( parameters.AnalyseFirst == false ) ||
@@ -197,7 +324,7 @@ namespace SynchApp
 				}
 				else
 				{
-					Console.WriteLine( "Error: exclude-from-deletion options (-ndf and -ndd) require deletion (-d) enabled." );
+					Console.WriteLine( "Error: exclude-from-deletion options (-ndf and -ndd) require deletion (-df or -dd) enabled." );
 					DisplayHelp( options );
 				}
 			}
@@ -211,13 +338,48 @@ namespace SynchApp
 		}
 
 		/// <summary>
+		/// Configure the OptionsSet object used to parse command line parameters
+		/// </summary>
+		/// <param name="parameters"></param>
+		/// <returns></returns>
+		private static OptionSet ConfigureOptions( ProgramParams parameters )
+		{
+			return new OptionSet()
+						   .Add( "a|analyse", "analysis only, no synchronisation", a => parameters.AnalyseOnly = true )
+						   .Add( "af|analyse first", "analysis only first and only synch if within limits defined in -ld and -lf options",
+							   af => parameters.AnalyseFirst = true )
+						   .Add( "xh|exclude hidden", "exclude hidden files and directories", xh => parameters.ExcludeHidden = true )
+						   .Add( "xi|exclude identical", "exclude identical files from the report", xi => parameters.ExcludeIdenticalFiles = true )
+						   .Add( "df|delete files", "delete files in destination which do not appear in source", df => parameters.DeleteFilesFromDest = true )
+						   .Add( "dd|delete dirs", "delete directories in destination which do not appear in source", dd => parameters.DeleteDirsFromDest = true )
+						   .Add( "xf|exclude files=", "exclude files from source that match any of the filespecs",
+							   xf => parameters.ExcludeFiles = FormRegexListfromString( xf, parameters.UseRegex ) )
+						   .Add( "xd|exclude directories=", "exclude directories from source that match any of the filespecs",
+							   xd => parameters.ExcludeDirs = FormRegexListfromString( xd, parameters.UseRegex ) )
+						   .Add( "if|include files=", "only include files from source that match one of the filespecs",
+							   inf => parameters.IncludeFiles = FormRegexListfromString( inf, parameters.UseRegex ) )
+						   .Add( "id|include directories=", "include directories from source that match one of the filespecs",
+							   ind => parameters.IncludeDirs = FormRegexListfromString( ind, parameters.UseRegex ) )
+						   .Add( "ndf|exclude delete files=", "exclude files from deletion that match any of the filespecs",
+							   ndf => parameters.DeleteExcludeFiles = FormRegexListfromString( ndf, parameters.UseRegex ) )
+						   .Add( "ndd|exclude delete directories=", "Exclude directories from deletion that match any of the filespecs",
+							   ndd => parameters.DeleteExcludeDirs = FormRegexListfromString( ndd, parameters.UseRegex ) )
+						   .Add( "ld|limit directory synch=", "limit on the number of directories that will be synchronised if the --af option is set",
+							   ( uint ld ) => parameters.DirectorySynchLimit = ld )
+						   .Add( "lf|limit file synch=", "limit on the number of files that will be synchronised if the --af option is set",
+							   ( uint lf ) => parameters.FileSynchLimit = lf );
+		}
+
+		/// <summary>
 		/// Display the options specified in the OptionSet and any multiple option requirements
 		/// </summary>
 		/// <param name="options"></param>
 		private static void DisplayHelp( OptionSet options )
 		{
 			Console.WriteLine( "Usage 'SynchApp source destination [OPTIONS]+'" );
+			Console.WriteLine( "Usage 'SynchApp config'" );
 			Console.WriteLine( "Synchronise the destination directory with the source directory" );
+			Console.WriteLine( "Directories and options can be either specified on the command line or in an XML configuration file" );
 			Console.WriteLine( "Options: " );
 
 			Console.WriteLine( "" );
@@ -246,6 +408,11 @@ namespace SynchApp
 				{
 					Console.WriteLine( string.Format( "'{0}' only in '{1}'", result.Message, result.Container ) );
 					FilesMissing++;
+
+					if ( result.Context == SyncResult.ContainerType.Destination )
+					{
+						UnmatchedDestinationFile++;
+					}
 				}
 				else
 				{
@@ -270,7 +437,6 @@ namespace SynchApp
 							FilesChanged++;
 							break;
 						}
-
 					}
 				}
 			}
@@ -280,6 +446,11 @@ namespace SynchApp
 				{
 					Console.WriteLine( string.Format( "'{0}' only in '{1}'", result.Message, result.Container ) );
 					DirectoriesMissing++;
+
+					if ( result.Context == SyncResult.ContainerType.Destination )
+					{
+						UnmatchedDestinationDirectory++;
+					}
 				}
 			}
 		}
@@ -288,8 +459,9 @@ namespace SynchApp
 		/// Form an array of Regex expressions from a comma delimited string
 		/// </summary>
 		/// <param name="commaDelimitedString"></param>
+		/// <param name="useRegex"></param>
 		/// <returns></returns>
-		private static Regex[] FormRegexListfromString( string commaDelimitedString )
+		private static Regex[] FormRegexListfromString( string commaDelimitedString, bool useRegex )
 		{
 			List<Regex> result = new List<Regex>();
 
@@ -298,11 +470,54 @@ namespace SynchApp
 			{
 				if ( regexString.Length > 0 )
 				{
-					result.Add( new Regex( regexString ) );
+					// If simple strings are being used (useRegex = false) then specify that the entire string should be matched
+					if ( useRegex == true )
+					{
+						result.Add( new Regex( regexString ) );
+					}
+					else
+					{
+						result.Add( new Regex( '^' + regexString + '$' ) );
+					}
 				}
 			}
 
 			return result.ToArray();
+		}
+
+		/// <summary>
+		/// Form an array of Regex expressions from an array of strings
+		/// </summary>
+		/// <param name="strings"></param>
+		/// <param name="useRegex"></param>
+		/// <returns></returns>
+		private static Regex[] RegexListFromStringList( string[] strings, bool useRegex )
+		{
+			List<Regex> result = new List<Regex>();
+
+			foreach ( string regexString in strings )
+			{
+				// If simple strings are being used (useRegex = false) then specify that the entire string should be matched
+				if ( useRegex == true )
+				{
+					result.Add( new Regex( regexString ) );
+				}
+				else
+				{
+					result.Add( new Regex( '^' + regexString + '$' ) );
+				}
+			}
+
+			return result.ToArray();
+		}
+
+		private static void ResetLocalCounts()
+		{
+			DirectoriesMissing = 0;
+			FilesMissing = 0;
+			FilesChanged = 0;
+			UnmatchedDestinationFile = 0;
+			UnmatchedDestinationDirectory = 0;
 		}
 
 		/// <summary>
@@ -311,13 +526,16 @@ namespace SynchApp
 		private static uint DirectoriesMissing = 0;
 		private static uint FilesMissing = 0;
 		private static uint FilesChanged = 0;
+		private static uint UnmatchedDestinationFile = 0;
+		private static uint UnmatchedDestinationDirectory = 0;
 
 		private enum ExitCode: int
 		{
 			Success = 0,
 			OptionError = 1,
 			DirectoryError = 2,
-			LimitsReached = 3
+			LimitsReached = 3,
+			XmlError = 4
 		}
 	}
 }

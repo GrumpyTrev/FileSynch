@@ -21,12 +21,6 @@ namespace SynchLibrary
 		public bool AnalyseOnly { get; set; } = false;
 
 		/// <summary>
-		/// If true perform an analysis of the differences and then only synchronise if the number of
-		/// directories and files to sychronise is below the specified limits
-		/// </summary>
-		public bool AnalyseFirst { get; set; } = false;
-
-		/// <summary>
 		/// Should exclude hidden files/directories in source
 		/// </summary>
 		public bool ExcludeHidden { get; set; } = false;
@@ -37,9 +31,19 @@ namespace SynchLibrary
 		public bool ExcludeIdenticalFiles { get; set; } = false;
 
 		/// <summary>
-		/// Should delete files/directories from dest than are not present in source
+		/// Should delete files from dest than are not present in source
 		/// </summary>
-		public bool DeleteFromDest { get; set; } = false;
+		public bool DeleteFilesFromDest { get; set; } = false;
+
+		/// <summary>
+		/// Should delete directories from dest than are not present in source
+		/// </summary>
+		public bool DeleteDirsFromDest { get; set; } = false;
+
+		/// <summary>
+		/// Should the include and exclude directory directives only apply to top directory of the source/target
+		/// </summary>
+		public bool IncludeExcludeTopLevelOnly { get; set; } = true;
 
 		/// <summary>
 		/// List of filespecs to exclude
@@ -91,5 +95,16 @@ namespace SynchLibrary
                     (IncludeDirs != null) || (ExcludeDirs != null);
             }
         }
+
+		/// <summary>
+		/// Any filtering to be applied to source directories
+		/// </summary>
+		public bool AreSourceDirectoriesFiltered
+		{
+			get
+			{
+				return ( IncludeDirs != null ) || ( ExcludeDirs != null );
+			}
+		}
     }
 }

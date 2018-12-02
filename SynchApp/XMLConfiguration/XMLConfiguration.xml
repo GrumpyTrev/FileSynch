@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+	<Options>
+		<excludeHidden>true</excludeHidden>
+		<excludeIdentical>true</excludeIdentical>
+		<analyseOnly>true</analyseOnly>
+		<deleteDirectories>false</deleteDirectories>
+		<deleteFiles>false</deleteFiles>
+		<topLevelDirectories>true</topLevelDirectories>
+		<useRegex>false</useRegex>
+	</Options>
+	<Backups>
+		<Backup name="From D to J">
+			<source>D:</source>
+			<destination>J:</destination>
+			<directoryExcludes>
+				<directoryExclude>music</directoryExclude>
+				<directoryExclude>videos</directoryExclude>
+			</directoryExcludes>
+			<directoryIncludes>
+			</directoryIncludes>
+		</Backup>
+		<Backup name="From D to K">
+			<source>D:</source>
+			<destination>K:</destination>
+			<directoryExcludes>
+				<directoryExclude>music</directoryExclude>
+				<directoryExclude>videos</directoryExclude>
+			</directoryExcludes>
+			<directoryIncludes>
+			</directoryIncludes>
+		</Backup>
+		<Backup name="From J to K">
+			<source>J:</source>
+			<destination>K:</destination>
+			<directoryExcludes>
+			</directoryExcludes>
+			<directoryIncludes>
+				<directoryInclude>music</directoryInclude>
+				<directoryInclude>videos</directoryInclude>
+				<directoryInclude>pictures</directoryInclude>
+			</directoryIncludes>
+		</Backup>
+		<Backup name="From J to D">
+			<source>J:</source>
+			<destination>D:</destination>
+			<directoryExcludes>
+			</directoryExcludes>
+			<directoryIncludes>
+				<directoryInclude>music</directoryInclude>
+				<directoryInclude>videos</directoryInclude>
+			</directoryIncludes>
+		</Backup>
+	</Backups>
+</Configuration>
