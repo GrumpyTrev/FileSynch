@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Linq;
 
 namespace SynchLibrary
 {
@@ -10,19 +10,16 @@ namespace SynchLibrary
 	/// </summary>
 	public class Sync
     {
-        /// <summary>
-        /// Initializes a new instance of Synchonizer object.
-        /// </summary>
-        public Sync( InputParams options )
-        {
-			Configuration = options;
-		}
+		/// <summary>
+		/// Initializes a new instance of Synchonizer object.
+		/// </summary>
+		public Sync( InputParams options ) => Configuration = options;
 
-        /// <summary>
-        /// Set this property to log the synchronization progress by this class to the given delegate. 
-        /// For example, to log to the console, set this property to Console.Write.
-        /// </summary>
-        public virtual Action< SyncResult > Log { get; set; }
+		/// <summary>
+		/// Set this property to log the synchronization progress by this class to the given delegate. 
+		/// For example, to log to the console, set this property to Console.Write.
+		/// </summary>
+		public virtual Action< SyncResult > Log { get; set; }
 
         /// <summary>
         /// Get or set all synronization parameters
@@ -63,7 +60,7 @@ namespace SynchLibrary
 				destinationInfo = new DirectoryInfo( destinationDirectory );
 				if ( destinationInfo.Exists == true )
 				{
-					if ( SynchroniseFiles( sourceInfo, destinationInfo ) == true )
+					if ( SynchroniseFiles( sourceInfo, destinationInfo, topLevel ) == true )
 					{
 						success = SynchroniseSubDirectories( sourceInfo, destinationInfo, topLevel );
 					}
@@ -116,40 +113,30 @@ namespace SynchLibrary
 		/// <param name="sourceDirectory"></param>
 		/// <param name="destinationDirectory"></param>
 		/// <returns></returns>
-		private bool SynchroniseFiles( DirectoryInfo sourceDirectory, DirectoryInfo destinationDirectory )
+		private bool SynchroniseFiles( DirectoryInfo sourceDirectory, DirectoryInfo destinationDirectory, bool topLevel )
 		{
 			bool success = true;
 
 			// Get list of files from source directory
-			List<FileInfo> sourceFiles = GetFiles( sourceDirectory, Configuration );
+			List<FileInfo> sourceFiles = GetFiles( sourceDirectory, Configuration, topLevel );
 
 			// Get list of files in destination directory
-			List<FileInfo> destinationFiles = GetFiles( destinationDirectory, null );
+			List<FileInfo> destinationFiles = GetFiles( destinationDirectory, null, topLevel );
 
-			// Make sure there was no problem accessing the files
-			if ( ( sourceFiles != null ) && ( destinationFiles != null ) )
+			// Form destination file dictionary for quick lookup                
+			Dictionary<string, FileInfo> destinationFilesDictionary = destinationFiles.ToDictionary( key => key.Name, value => value );
+
+			// Compare files in the source directory against the destination directory
+			for ( int fileIndex = 0; ( fileIndex < sourceFiles.Count ) && ( success == true ); ++fileIndex )
 			{
-				// Form destination file dictionary for quick lookup                
-				Dictionary<string, FileInfo> destinationFilesDictionary = new Dictionary<string, FileInfo>();
-				foreach ( FileInfo destinationFile in destinationFiles )
-				{
-					destinationFilesDictionary.Add( destinationFile.Name, destinationFile );
-				}
+				success = SynchroniseFile( sourceFiles[ fileIndex ], destinationDirectory, destinationFilesDictionary );
+			}
 
-				// Compare files in the source directory against the destination directory
-				for ( int fileIndex = 0; ( fileIndex < sourceFiles.Count ) && ( success == true ); ++fileIndex )
-				{
-					success = SynchroniseFile( sourceFiles[ fileIndex ], destinationDirectory, destinationFilesDictionary );
-				}
-
-				// Check if destination files should be removed, but only actually delete if the deletion flag is set
-
+			// Check if destination files should be removed. Don't do this if there was a problem synchronising the files
+			if ( success == true )
+			{
 				// Form source file dictionary for quick lookup
-				Dictionary<string, FileInfo> sourceFilesDictionary = new Dictionary<string, FileInfo>();
-				foreach ( FileInfo sourceFile in sourceFiles )
-				{
-					sourceFilesDictionary.Add( sourceFile.Name, sourceFile );
-				}
+				Dictionary<string, FileInfo> sourceFilesDictionary = sourceFiles.ToDictionary( key => key.Name, value => value );
 
 				for ( int fileIndex = 0; ( fileIndex < destinationFiles.Count ) && ( success == true ); ++fileIndex )
 				{
@@ -157,13 +144,9 @@ namespace SynchLibrary
 
 					if ( sourceFilesDictionary.ContainsKey( destinationFile.Name ) == false )
 					{
-						success = DeleteUnmatchedFile( destinationFile );
+						success = DeleteUnmatchedFile( destinationFile, topLevel );
 					}
 				}
-			}
-			else
-			{
-				success = false;
 			}
 
 			return success;
@@ -258,12 +241,12 @@ namespace SynchLibrary
 		/// </summary>
 		/// <param name="fileToDelete"></param>
 		/// <returns></returns>
-		private bool DeleteUnmatchedFile( FileInfo fileToDelete )
+		private bool DeleteUnmatchedFile( FileInfo fileToDelete, bool topLevel )
 		{
 			bool success = true;
 
 			// If this file is specified in exclude-from-deletion list, don't delete it
-			if ( ShouldExclude( Configuration.DeleteExcludeFiles, null, fileToDelete.Name ) == false )
+			if ( ShouldExclude( Configuration.DeleteExcludeFiles, null, fileToDelete.Name, fileToDelete.FullName, topLevel ) == false )
 			{
 				TraceItem( SyncResult.ItemType.File, SyncResult.ReasonType.OnlyIn, SyncResult.ContainerType.Destination,
 					FileDisplayName( fileToDelete.FullName, Configuration.DestinationDirectory ), Configuration.DestinationDirectory );
@@ -305,30 +288,28 @@ namespace SynchLibrary
 			// Get list of subdirectories in destination directory
 			List<DirectoryInfo> destinationSubDirectories = GetDirectories( destinationDirectory, Configuration, topLevel );
 
-			// Any problems accessing the subdirectories
-			if ( ( sourceSubDirectories != null ) && ( destinationSubDirectories != null ) )
+			// Add selected source subdirectories to dictionary, and recursively process them
+			Dictionary<string, DirectoryInfo> sourceDirectoriesDictionary = sourceSubDirectories.ToDictionary( key => key.Name, value => value );
+
+			for ( int directoryIndex = 0; ( directoryIndex < sourceSubDirectories.Count ) && ( success == true ); ++directoryIndex )
 			{
-				// Add selected source subdirectories to dictionary, and recursively process them
-				Dictionary<string, DirectoryInfo> sourceDirectoriesDictionary = new Dictionary<string, DirectoryInfo>();
+				DirectoryInfo sourceSubDirectory = sourceSubDirectories[ directoryIndex ];
 
-				for ( int directoryIndex = 0; ( directoryIndex < sourceSubDirectories.Count ) && ( success == true ); ++directoryIndex )
-				{
-					DirectoryInfo sourceSubDirectory = sourceSubDirectories[ directoryIndex ];
+				// Recurse into this directory
+				success = ProcessDirectory( sourceSubDirectory.FullName, Path.Combine( destinationDirectory.FullName, sourceSubDirectory.Name ), false );
+			}
 
-					sourceDirectoriesDictionary.Add( sourceSubDirectory.Name, sourceSubDirectory );
-
-					// Recurse into this directory
-					success = ProcessDirectory( sourceSubDirectory.FullName, Path.Combine( destinationDirectory.FullName, sourceSubDirectory.Name ), false );
-				}
-
-				// Delete extra directories in destination if specified
+			// Delete extra directories in destination if specified
+			// Only do this if there were no errors in synchronising the source directories
+			if ( success == true )
+			{
 				foreach ( DirectoryInfo destinationSubDirectory in destinationSubDirectories )
 				{
 					// does this destination subdirectory exist in the source subdirs?
 					if ( sourceDirectoriesDictionary.ContainsKey( destinationSubDirectory.Name ) == false )
 					{
 						// if this directory is specified in exclude-from-deletion list, don't delete it
-						if ( ShouldExclude( Configuration.DeleteExcludeDirs, null, destinationSubDirectory.Name ) == false )
+						if ( ShouldExclude( Configuration.DeleteExcludeDirs, null, destinationSubDirectory.Name, destinationSubDirectory.FullName, topLevel ) == false )
 						{
 							TraceItem( SyncResult.ItemType.Directory, SyncResult.ReasonType.OnlyIn, SyncResult.ContainerType.Destination,
 								FileDisplayName( destinationSubDirectory.FullName, Configuration.DestinationDirectory ), Configuration.DestinationDirectory );
@@ -352,11 +333,6 @@ namespace SynchLibrary
 					}
 				}
 			}
-			else
-			{
-				success = false;
-			}
-
 			return success;
 		}
 
@@ -380,9 +356,9 @@ namespace SynchLibrary
 		/// Gets list of files in specified directory, optionally filtered by specified input parameters
 		/// </summary>
 		/// <param name="directoryInfo"></param>
-		private List<FileInfo> GetFiles( DirectoryInfo directoryInfo, InputParams filesConfiguration )
+		private List<FileInfo> GetFiles( DirectoryInfo directoryInfo, InputParams filesConfiguration, bool topLevel )
 		{
-			List<FileInfo> returnList = null;
+			List<FileInfo> returnList = new List<FileInfo>();
 
 			try
 			{
@@ -393,13 +369,11 @@ namespace SynchLibrary
 				if ( ( filesConfiguration != null ) && ( filesConfiguration.AreSourceFilesFiltered == true ) )
 				{
 					// Copy all included files to the return list
-					returnList = new List<FileInfo>();
-
 					foreach ( FileInfo fileInfo in fileList )
 					{
 						// Only copy files that are not explicitly excluded or excluded due to being hidden and the exclude hidden option is set
 						if ( ( ( filesConfiguration.ExcludeHidden == false ) || ( ( fileInfo.Attributes & FileAttributes.Hidden ) == 0 ) ) &&
-							( ShouldExclude( filesConfiguration.ExcludeFiles, filesConfiguration.IncludeFiles, fileInfo.Name ) == false ) )
+							( ShouldExclude( filesConfiguration.ExcludeFiles, filesConfiguration.IncludeFiles, fileInfo.Name, fileInfo.FullName, topLevel ) == false ) )
 						{
 							returnList.Add( fileInfo );
 						}
@@ -426,7 +400,7 @@ namespace SynchLibrary
 		/// <param name="topLevel">Is this the top level directory of the synchronisation job</param>
 		private List<DirectoryInfo> GetDirectories( DirectoryInfo directoryInfo, InputParams filesConfiguration, bool topLevel )
 		{
-			List<DirectoryInfo> returnList = null;
+			List<DirectoryInfo> returnList = new List<DirectoryInfo>();
 
 			try
 			{
@@ -434,26 +408,15 @@ namespace SynchLibrary
 				List<DirectoryInfo> directoryList = new List<DirectoryInfo>( directoryInfo.GetDirectories() );
 
 				// Do we need to do any filtering?
-				if ( ( filesConfiguration.ExcludeHidden == true ) ||
-					( filesConfiguration.AreSourceDirectoriesFiltered == true ) && ( ( topLevel == true ) || ( filesConfiguration.IncludeExcludeTopLevelOnly == false ) ) )
+				if ( ( filesConfiguration.ExcludeHidden == true ) || ( filesConfiguration.AreSourceDirectoriesFiltered == true ) )
 				{
-					returnList = new List<DirectoryInfo>();
-
 					foreach ( DirectoryInfo subdirInfo in directoryList )
 					{
 						// Filter out directories based on hiddenness and exclude/include filespecs
 						// Should directory be filtered due to it being hidden
 						if ( ( filesConfiguration.ExcludeHidden == false ) || ( ( subdirInfo.Attributes & FileAttributes.Hidden ) == 0 ) )
 						{
-							// Should directory be filtered by name
-							if ( ( topLevel == true ) || ( filesConfiguration.IncludeExcludeTopLevelOnly == false ) )
-							{
-								if ( ShouldExclude( filesConfiguration.ExcludeDirs, filesConfiguration.IncludeDirs, subdirInfo.Name ) == false )
-								{
-									returnList.Add( subdirInfo );
-								}
-							}
-							else
+							if ( ShouldExclude( filesConfiguration.ExcludeDirs, filesConfiguration.IncludeDirs, subdirInfo.Name, subdirInfo.FullName, topLevel ) == false )
 							{
 								returnList.Add( subdirInfo );
 							}
@@ -481,7 +444,7 @@ namespace SynchLibrary
 		/// <param name="excludeList"></param>
 		/// <param name="includeList"></param>
 		/// <param name="name"></param>
-		private bool ShouldExclude( Regex[] excludeList, Regex[] includeList, string name )
+		private bool ShouldExclude( DirectoryFilter[] excludeList, DirectoryFilter[] includeList, string name, string path, bool topLevel )
 		{
 			bool exclude = false;
 
@@ -490,8 +453,11 @@ namespace SynchLibrary
 				// Check against regex's in our exclude list
 				for ( int index = 0; ( ( index < excludeList.Length ) && ( exclude == false ) ); ++index )
 				{
-					// If the name matches an entry in the exclude list, we SHOULD exclude it
-					exclude = excludeList[ index ].Match( name ).Success;
+					DirectoryFilter filter = excludeList[ index ];
+					if ( ( topLevel == true ) || ( filter.TopLevelOnly == false ) )
+					{
+						exclude = filter.Name.Match( ( filter.FullPath == true ) ? path : name ).Success;
+					}
 				}
 			}
 			else if ( includeList != null )
@@ -501,38 +467,43 @@ namespace SynchLibrary
 
 				for ( int index = 0; ( ( index < includeList.Length ) && ( exclude == true ) ); ++index )
 				{
-					exclude = ( includeList[ index ].Match( name ).Success == false );
+					DirectoryFilter filter = includeList[ index ];
+					if ( ( topLevel == true ) || ( filter.TopLevelOnly == false ) )
+					{
+						exclude = ( filter.Name.Match( ( filter.FullPath == true ) ? path : name ).Success == false );
+					}
 				}
 			}
 
 			return exclude;
 		}
 
-        /// <summary>
-        /// Trace message
-        /// </summary>
-        /// <param name="message"></param>
-        /// <param name="args"></param>
-        private void Trace( string message, params object[] args )
-        {
-            if ( Log != null)
-			{
-                Log.Invoke( results.AddResult( String.Format( message, args ) ) );
-			}
-        }
+		/// <summary>
+		/// Trace message
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="args"></param>
+		private void Trace( string message, params object[] args ) => Log?.Invoke( results.AddResult( string.Format( message, args ) ) );
 
-		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, string itemName )
-		{
-			TraceItem( type, reason, SyncResult.ContainerType.NA ,itemName, null );
-		}
+		/// <summary>
+		/// Trace message for a known item type and reason 
+		/// </summary>
+		/// <param name="type"></param>
+		/// <param name="reason"></param>
+		/// <param name="itemName"></param>
+		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, string itemName ) => 
+			TraceItem( type, reason, SyncResult.ContainerType.NA, itemName, null );
 
-		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, SyncResult.ContainerType container, string itemName, string containerName )
-		{
-			if ( Log != null )
-			{
-				Log.Invoke( results.AddResult( type, reason, container, itemName, containerName ) );
-			}
-		}
+		/// <summary>
+		/// Trace a message for a known item type, reason and container
+		/// </summary>
+		/// <param name="type"></param>
+		/// <param name="reason"></param>
+		/// <param name="container"></param>
+		/// <param name="itemName"></param>
+		/// <param name="containerName"></param>
+		private void TraceItem( SyncResult.ItemType type, SyncResult.ReasonType reason, SyncResult.ContainerType container, string itemName, string containerName ) => 
+			Log?.Invoke( results.AddResult( type, reason, container, itemName, containerName ) );
 
 		/// <summary>
 		/// Remove the root directory from the front of the filename
@@ -552,6 +523,9 @@ namespace SynchLibrary
 			return displayName;
 		}
 
+		/// <summary>
+		/// The set of results from the synchronisation
+		/// </summary>
 		private SyncResults results = null;
     }
 }

@@ -22,30 +22,70 @@ namespace SynchApp {
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
     [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
-    public partial class Configuration {
+    public partial class directoryFilter {
         
-        private ConfigurationOptions optionsField;
+        private bool fullPathField;
         
-        private ConfigurationBackup[] backupsField;
+        private bool fullPathFieldSpecified;
+        
+        private bool topLevelOnlyField;
+        
+        private bool topLevelOnlyFieldSpecified;
+        
+        private string valueField;
         
         /// <remarks/>
-        public ConfigurationOptions Options {
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public bool fullPath {
             get {
-                return this.optionsField;
+                return this.fullPathField;
             }
             set {
-                this.optionsField = value;
+                this.fullPathField = value;
             }
         }
         
         /// <remarks/>
-        [System.Xml.Serialization.XmlArrayItemAttribute("Backup", IsNullable=false)]
-        public ConfigurationBackup[] Backups {
+        [System.Xml.Serialization.XmlIgnoreAttribute()]
+        public bool fullPathSpecified {
             get {
-                return this.backupsField;
+                return this.fullPathFieldSpecified;
             }
             set {
-                this.backupsField = value;
+                this.fullPathFieldSpecified = value;
+            }
+        }
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public bool topLevelOnly {
+            get {
+                return this.topLevelOnlyField;
+            }
+            set {
+                this.topLevelOnlyField = value;
+            }
+        }
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlIgnoreAttribute()]
+        public bool topLevelOnlySpecified {
+            get {
+                return this.topLevelOnlyFieldSpecified;
+            }
+            set {
+                this.topLevelOnlyFieldSpecified = value;
+            }
+        }
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlTextAttribute()]
+        public string Value {
+            get {
+                return this.valueField;
+            }
+            set {
+                this.valueField = value;
             }
         }
     }
@@ -56,7 +96,151 @@ namespace SynchApp {
     [System.Diagnostics.DebuggerStepThroughAttribute()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
-    public partial class ConfigurationOptions {
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
+    public partial class directoryExcludes {
+        
+        private directoryFilter[] directoryFilterField;
+        
+        private string[] textField;
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlElementAttribute("directoryFilter")]
+        public directoryFilter[] directoryFilter {
+            get {
+                return this.directoryFilterField;
+            }
+            set {
+                this.directoryFilterField = value;
+            }
+        }
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlTextAttribute()]
+        public string[] Text {
+            get {
+                return this.textField;
+            }
+            set {
+                this.textField = value;
+            }
+        }
+    }
+    
+    /// <remarks/>
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.6.1055.0")]
+    [System.SerializableAttribute()]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
+    public partial class directoryIncludes {
+        
+        private directoryFilter[] directoryFilterField;
+        
+        private string[] textField;
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlElementAttribute("directoryFilter")]
+        public directoryFilter[] directoryFilter {
+            get {
+                return this.directoryFilterField;
+            }
+            set {
+                this.directoryFilterField = value;
+            }
+        }
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlTextAttribute()]
+        public string[] Text {
+            get {
+                return this.textField;
+            }
+            set {
+                this.textField = value;
+            }
+        }
+    }
+    
+    /// <remarks/>
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.6.1055.0")]
+    [System.SerializableAttribute()]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
+    public partial class Backup {
+        
+        private string sourceField;
+        
+        private string destinationField;
+        
+        private directoryExcludes directoryExcludesField;
+        
+        private directoryIncludes directoryIncludesField;
+        
+        private string nameField;
+        
+        /// <remarks/>
+        public string source {
+            get {
+                return this.sourceField;
+            }
+            set {
+                this.sourceField = value;
+            }
+        }
+        
+        /// <remarks/>
+        public string destination {
+            get {
+                return this.destinationField;
+            }
+            set {
+                this.destinationField = value;
+            }
+        }
+        
+        /// <remarks/>
+        public directoryExcludes directoryExcludes {
+            get {
+                return this.directoryExcludesField;
+            }
+            set {
+                this.directoryExcludesField = value;
+            }
+        }
+        
+        /// <remarks/>
+        public directoryIncludes directoryIncludes {
+            get {
+                return this.directoryIncludesField;
+            }
+            set {
+                this.directoryIncludesField = value;
+            }
+        }
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name {
+            get {
+                return this.nameField;
+            }
+            set {
+                this.nameField = value;
+            }
+        }
+    }
+    
+    /// <remarks/>
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.6.1055.0")]
+    [System.SerializableAttribute()]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
+    public partial class Options {
         
         private bool excludeHiddenField;
         
@@ -67,8 +251,6 @@ namespace SynchApp {
         private bool deleteDirectoriesField;
         
         private bool deleteFilesField;
-        
-        private bool topLevelDirectoriesField;
         
         private bool useRegexField;
         
@@ -123,16 +305,6 @@ namespace SynchApp {
         }
         
         /// <remarks/>
-        public bool topLevelDirectories {
-            get {
-                return this.topLevelDirectoriesField;
-            }
-            set {
-                this.topLevelDirectoriesField = value;
-            }
-        }
-        
-        /// <remarks/>
         public bool useRegex {
             get {
                 return this.useRegexField;
@@ -149,66 +321,19 @@ namespace SynchApp {
     [System.Diagnostics.DebuggerStepThroughAttribute()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
-    public partial class ConfigurationBackup {
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
+    public partial class Backups {
         
-        private string sourceField;
-        
-        private string destinationField;
-        
-        private ConfigurationBackupDirectoryExcludes directoryExcludesField;
-        
-        private ConfigurationBackupDirectoryIncludes directoryIncludesField;
-        
-        private string nameField;
+        private Backup[] backupField;
         
         /// <remarks/>
-        public string source {
+        [System.Xml.Serialization.XmlElementAttribute("Backup")]
+        public Backup[] Backup {
             get {
-                return this.sourceField;
+                return this.backupField;
             }
             set {
-                this.sourceField = value;
-            }
-        }
-        
-        /// <remarks/>
-        public string destination {
-            get {
-                return this.destinationField;
-            }
-            set {
-                this.destinationField = value;
-            }
-        }
-        
-        /// <remarks/>
-        public ConfigurationBackupDirectoryExcludes directoryExcludes {
-            get {
-                return this.directoryExcludesField;
-            }
-            set {
-                this.directoryExcludesField = value;
-            }
-        }
-        
-        /// <remarks/>
-        public ConfigurationBackupDirectoryIncludes directoryIncludes {
-            get {
-                return this.directoryIncludesField;
-            }
-            set {
-                this.directoryIncludesField = value;
-            }
-        }
-        
-        /// <remarks/>
-        [System.Xml.Serialization.XmlAttributeAttribute()]
-        public string name {
-            get {
-                return this.nameField;
-            }
-            set {
-                this.nameField = value;
+                this.backupField = value;
             }
         }
     }
@@ -219,66 +344,31 @@ namespace SynchApp {
     [System.Diagnostics.DebuggerStepThroughAttribute()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
-    public partial class ConfigurationBackupDirectoryExcludes {
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="", IsNullable=false)]
+    public partial class Configuration {
         
-        private string[] directoryExcludeField;
+        private Options optionsField;
         
-        private string[] textField;
+        private Backup[] backupsField;
         
         /// <remarks/>
-        [System.Xml.Serialization.XmlElementAttribute("directoryExclude")]
-        public string[] directoryExclude {
+        public Options Options {
             get {
-                return this.directoryExcludeField;
+                return this.optionsField;
             }
             set {
-                this.directoryExcludeField = value;
+                this.optionsField = value;
             }
         }
         
         /// <remarks/>
-        [System.Xml.Serialization.XmlTextAttribute()]
-        public string[] Text {
+        [System.Xml.Serialization.XmlArrayItemAttribute("Backup", IsNullable=false)]
+        public Backup[] Backups {
             get {
-                return this.textField;
+                return this.backupsField;
             }
             set {
-                this.textField = value;
-            }
-        }
-    }
-    
-    /// <remarks/>
-    [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.6.1055.0")]
-    [System.SerializableAttribute()]
-    [System.Diagnostics.DebuggerStepThroughAttribute()]
-    [System.ComponentModel.DesignerCategoryAttribute("code")]
-    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
-    public partial class ConfigurationBackupDirectoryIncludes {
-        
-        private string[] directoryIncludeField;
-        
-        private string[] textField;
-        
-        /// <remarks/>
-        [System.Xml.Serialization.XmlElementAttribute("directoryInclude")]
-        public string[] directoryInclude {
-            get {
-                return this.directoryIncludeField;
-            }
-            set {
-                this.directoryIncludeField = value;
-            }
-        }
-        
-        /// <remarks/>
-        [System.Xml.Serialization.XmlTextAttribute()]
-        public string[] Text {
-            get {
-                return this.textField;
-            }
-            set {
-                this.textField = value;
+                this.backupsField = value;
             }
         }
     }

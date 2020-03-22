@@ -6,7 +6,6 @@
 		<analyseOnly>true</analyseOnly>
 		<deleteDirectories>false</deleteDirectories>
 		<deleteFiles>false</deleteFiles>
-		<topLevelDirectories>true</topLevelDirectories>
 		<useRegex>false</useRegex>
 	</Options>
 	<Backups>
@@ -14,8 +13,8 @@
 			<source>D:</source>
 			<destination>J:</destination>
 			<directoryExcludes>
-				<directoryExclude>music</directoryExclude>
-				<directoryExclude>videos</directoryExclude>
+				<directoryFilter fullPath="false" topLevelOnly="false">music</directoryFilter>
+				<directoryFilter>videos</directoryFilter>
 			</directoryExcludes>
 			<directoryIncludes>
 			</directoryIncludes>
@@ -24,8 +23,8 @@
 			<source>D:</source>
 			<destination>K:</destination>
 			<directoryExcludes>
-				<directoryExclude>music</directoryExclude>
-				<directoryExclude>videos</directoryExclude>
+				<directoryFilter>music</directoryFilter>
+				<directoryFilter>videos</directoryFilter>
 			</directoryExcludes>
 			<directoryIncludes>
 			</directoryIncludes>
@@ -36,9 +35,9 @@
 			<directoryExcludes>
 			</directoryExcludes>
 			<directoryIncludes>
-				<directoryInclude>music</directoryInclude>
-				<directoryInclude>videos</directoryInclude>
-				<directoryInclude>pictures</directoryInclude>
+				<directoryFilter fullPath="false" topLevelOnly="false">music</directoryFilter>
+				<directoryFilter>videos</directoryFilter>
+				<directoryFilter>pictures</directoryFilter>
 			</directoryIncludes>
 		</Backup>
 		<Backup name="From J to D">
@@ -47,8 +46,8 @@
 			<directoryExcludes>
 			</directoryExcludes>
 			<directoryIncludes>
-				<directoryInclude>music</directoryInclude>
-				<directoryInclude>videos</directoryInclude>
+				<directoryFilter>music</directoryFilter>
+				<directoryFilter>videos</directoryFilter>
 			</directoryIncludes>
 		</Backup>
 	</Backups>

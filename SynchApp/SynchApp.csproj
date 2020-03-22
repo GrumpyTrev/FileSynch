@@ -57,8 +57,14 @@
   <ItemGroup>
     <None Include="App.config" />
     <None Include="packages.config" />
+    <None Include="XMLConfiguration\XMLConfiguration.xsc">
+      <DependentUpon>XMLConfiguration.xsd</DependentUpon>
+    </None>
     <None Include="XMLConfiguration\XMLConfiguration.xsd">
       <SubType>Designer</SubType>
+    </None>
+    <None Include="XMLConfiguration\XMLConfiguration.xss">
+      <DependentUpon>XMLConfiguration.xsd</DependentUpon>
     </None>
   </ItemGroup>
   <ItemGroup>
@@ -68,7 +74,9 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="XMLConfiguration\XMLConfiguration.xml" />
+    <Content Include="XMLConfiguration\XMLConfiguration.xml">
+      <SubType>Designer</SubType>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

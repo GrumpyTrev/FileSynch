@@ -141,8 +141,7 @@ namespace SynchApp
 						Console.WriteLine( "Synchronising source '{0}' and destination '{1}'", fullSrcDir, fullDestDir );
 						Console.WriteLine( "==================================================" );
 
-						Sync synchroniseFiles = new Sync( parameters );
-						synchroniseFiles.Log = LogResult;
+						Sync synchroniseFiles = new Sync( parameters ) { Log = LogResult };
 
 						if ( parameters.AnalyseFirst == true )
 						{
@@ -232,7 +231,7 @@ namespace SynchApp
 				Configuration xmlConfig = ( Configuration )new XmlSerializer( typeof( Configuration ) ).Deserialize( new FileStream( configFile, FileMode.Open ) );
 
 				// Now copy fields from the Configuration object to the parameters, one InputParams per backup job
-				foreach ( ConfigurationBackup backup in xmlConfig.Backups )
+				foreach ( Backup backup in xmlConfig.Backups )
 				{
 					ProgramParams parameters = new ProgramParams();
 
@@ -243,21 +242,20 @@ namespace SynchApp
 					parameters.DeleteDirsFromDest = xmlConfig.Options.deleteDirectories;
 					parameters.DeleteFilesFromDest = xmlConfig.Options.deleteFiles;
 					parameters.UseRegex = xmlConfig.Options.useRegex;
-					parameters.IncludeExcludeTopLevelOnly = xmlConfig.Options.topLevelDirectories;
 
 					// Specific to this backup
 					parameters.Name = backup.name;
 					parameters.SourceDirectory = new DirectoryInfo( backup.source ).FullName;
 					parameters.DestinationDirectory = new DirectoryInfo( backup.destination ).FullName;
 
-					if ( backup.directoryExcludes.directoryExclude != null )
+					if ( backup.directoryExcludes.directoryFilter != null )
 					{
-						parameters.ExcludeDirs = RegexListFromStringList( backup.directoryExcludes.directoryExclude, parameters.UseRegex );
+						parameters.ExcludeDirs = RegexListFromStringList( backup.directoryExcludes.directoryFilter, parameters.UseRegex );
 					}
 
-					if ( backup.directoryIncludes.directoryInclude != null )
+					if ( backup.directoryIncludes.directoryFilter != null )
 					{
-						parameters.IncludeDirs = RegexListFromStringList( backup.directoryIncludes.directoryInclude, parameters.UseRegex );
+						parameters.IncludeDirs = RegexListFromStringList( backup.directoryIncludes.directoryFilter, parameters.UseRegex );
 					}
 
 					backups.Add( parameters );
@@ -461,28 +459,34 @@ namespace SynchApp
 		/// <param name="commaDelimitedString"></param>
 		/// <param name="useRegex"></param>
 		/// <returns></returns>
-		private static Regex[] FormRegexListfromString( string commaDelimitedString, bool useRegex )
+		private static DirectoryFilter[] FormRegexListfromString( string commaDelimitedString, bool useRegex )
 		{
-			List<Regex> result = new List<Regex>();
+			List<DirectoryFilter> directoryFilters = new List<DirectoryFilter>();
 
 			// Form a Regex object for each string
 			foreach ( string regexString in commaDelimitedString.Split( ',', ' ' ) )
 			{
 				if ( regexString.Length > 0 )
 				{
+					DirectoryFilter newFilter = new DirectoryFilter();
+
 					// If simple strings are being used (useRegex = false) then specify that the entire string should be matched
 					if ( useRegex == true )
 					{
-						result.Add( new Regex( regexString ) );
+						newFilter.Name = new Regex( regexString );
 					}
 					else
 					{
-						result.Add( new Regex( '^' + regexString + '$' ) );
+						newFilter.Name = new Regex( '^' + regexString + '$' );
 					}
+
+					newFilter.FullPath = false;
+					newFilter.TopLevelOnly = true;
+					directoryFilters.Add( newFilter );
 				}
 			}
 
-			return result.ToArray();
+			return directoryFilters.ToArray();
 		}
 
 		/// <summary>
@@ -491,26 +495,35 @@ namespace SynchApp
 		/// <param name="strings"></param>
 		/// <param name="useRegex"></param>
 		/// <returns></returns>
-		private static Regex[] RegexListFromStringList( string[] strings, bool useRegex )
+		private static DirectoryFilter[] RegexListFromStringList( directoryFilter[] filters, bool useRegex )
 		{
-			List<Regex> result = new List<Regex>();
+			List<DirectoryFilter> directoryFilters = new List<DirectoryFilter>();
 
-			foreach ( string regexString in strings )
+			foreach ( directoryFilter filter in filters )
 			{
+				DirectoryFilter newFilter = new DirectoryFilter();
+
 				// If simple strings are being used (useRegex = false) then specify that the entire string should be matched
 				if ( useRegex == true )
 				{
-					result.Add( new Regex( regexString ) );
+					newFilter.Name = new Regex( filter.Value );
 				}
 				else
 				{
-					result.Add( new Regex( '^' + regexString + '$' ) );
+					newFilter.Name = new Regex( '^' + filter.Value + '$' );
 				}
+
+				newFilter.FullPath = filter.fullPath;
+				newFilter.TopLevelOnly = filter.topLevelOnly;
+				directoryFilters.Add( newFilter );
 			}
 
-			return result.ToArray();
+			return directoryFilters.ToArray();
 		}
 
+		/// <summary>
+		/// Reset the event counters
+		/// </summary>
 		private static void ResetLocalCounts()
 		{
 			DirectoriesMissing = 0;
@@ -529,6 +542,9 @@ namespace SynchApp
 		private static uint UnmatchedDestinationFile = 0;
 		private static uint UnmatchedDestinationDirectory = 0;
 
+		/// <summary>
+		/// Enumeration of the exit code for the program
+		/// </summary>
 		private enum ExitCode: int
 		{
 			Success = 0,

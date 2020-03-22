@@ -1,50 +1,71 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+﻿<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+	<xs:element name="excludeHidden" type="xs:boolean"/>
+	<xs:element name="excludeIdentical" type="xs:boolean"/>
+	<xs:element name="analyseOnly" type="xs:boolean"/>
+	<xs:element name="deleteDirectories" type="xs:boolean"/>
+	<xs:element name="deleteFiles" type="xs:boolean"/>
+	<xs:element name="useRegex" type="xs:boolean"/>
+	<xs:element name="directoryFilter">
+		<xs:complexType>
+			<xs:simpleContent>
+				<xs:extension base="xs:string">
+					<xs:attribute type="xs:boolean" name="fullPath" use="optional"/>
+					<xs:attribute type="xs:boolean" name="topLevelOnly" use="optional"/>
+				</xs:extension>
+			</xs:simpleContent>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="source" type="xs:string"/>
+	<xs:element name="destination" type="xs:string"/>
+	<xs:element name="directoryExcludes">
+		<xs:complexType mixed="true">
+			<xs:sequence>
+				<xs:element ref="directoryFilter" maxOccurs="unbounded" minOccurs="0"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="directoryIncludes">
+		<xs:complexType mixed="true">
+			<xs:sequence>
+				<xs:element ref="directoryFilter" maxOccurs="unbounded" minOccurs="0"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Backup">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="source"/>
+				<xs:element ref="destination"/>
+				<xs:element ref="directoryExcludes"/>
+				<xs:element ref="directoryIncludes"/>
+			</xs:sequence>
+			<xs:attribute type="xs:string" name="name" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Options">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="excludeHidden"/>
+				<xs:element ref="excludeIdentical"/>
+				<xs:element ref="analyseOnly"/>
+				<xs:element ref="deleteDirectories"/>
+				<xs:element ref="deleteFiles"/>
+				<xs:element ref="useRegex"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Backups">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="Backup" maxOccurs="unbounded" minOccurs="0"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
 	<xs:element name="Configuration">
 		<xs:complexType>
 			<xs:sequence>
-				<xs:element name="Options">
-					<xs:complexType>
-						<xs:sequence>
-							<xs:element name="excludeHidden" type="xs:boolean" />
-							<xs:element name="excludeIdentical" type="xs:boolean" />
-							<xs:element name="analyseOnly" type="xs:boolean" />
-							<xs:element name="deleteDirectories" type="xs:boolean" />
-							<xs:element name="deleteFiles" type="xs:boolean" />
-							<xs:element name="topLevelDirectories" type="xs:boolean" />
-							<xs:element name="useRegex" type="xs:boolean" />
-						</xs:sequence>
-					</xs:complexType>
-				</xs:element>
-				<xs:element name="Backups">
-					<xs:complexType>
-						<xs:sequence>
-							<xs:element maxOccurs="unbounded" name="Backup">
-								<xs:complexType>
-									<xs:sequence>
-										<xs:element name="source" type="xs:string" />
-										<xs:element name="destination" type="xs:string" />
-										<xs:element name="directoryExcludes">
-											<xs:complexType mixed="true">
-												<xs:sequence minOccurs="0">
-													<xs:element maxOccurs="unbounded" name="directoryExclude" type="xs:string" />
-												</xs:sequence>
-											</xs:complexType>
-										</xs:element>
-										<xs:element name="directoryIncludes">
-											<xs:complexType mixed="true">
-												<xs:sequence minOccurs="0">
-													<xs:element maxOccurs="unbounded" name="directoryInclude" type="xs:string" />
-												</xs:sequence>
-											</xs:complexType>
-										</xs:element>
-									</xs:sequence>
-									<xs:attribute name="name" type="xs:string" use="required" />
-								</xs:complexType>
-							</xs:element>
-						</xs:sequence>
-					</xs:complexType>
-				</xs:element>
+				<xs:element ref="Options"/>
+				<xs:element ref="Backups"/>
 			</xs:sequence>
 		</xs:complexType>
 	</xs:element>
