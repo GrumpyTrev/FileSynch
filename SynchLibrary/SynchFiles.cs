@@ -462,14 +462,15 @@ namespace SynchLibrary
 			}
 			else if ( includeList != null )
 			{
-				// Assume excluded
-				exclude = true;
-
-				for ( int index = 0; ( ( index < includeList.Length ) && ( exclude == true ) ); ++index )
+				// At the moment inclusion filters can only be applied at the top level
+				if ( topLevel == true )
 				{
-					DirectoryFilter filter = includeList[ index ];
-					if ( ( topLevel == true ) || ( filter.TopLevelOnly == false ) )
+					// Assume excluded
+					exclude = true;
+
+					for ( int index = 0; ( ( index < includeList.Length ) && ( exclude == true ) ); ++index )
 					{
+						DirectoryFilter filter = includeList[ index ];
 						exclude = ( filter.Name.Match( ( filter.FullPath == true ) ? path : name ).Success == false );
 					}
 				}
